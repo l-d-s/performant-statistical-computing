@@ -97,6 +97,8 @@ I presume this is to do with the pseudo-random number generator.
 
 One way there might be problems is if the "effective precision" of the PRNG is deliberately greater than machine precision—intuitively, it may be not worth the effort most of the time to come up with 52 truly random bits per $U(0, 1)$ draw if one can satisfactorily confine the nonrandomness to the last (however many) digits.
 
+> This is the case. 32bit int => 64 bit double.
+
 It could also be a subtler problem, e.g. some kind of periodicity that's manifest after, say, $\approx$ 10^4 draws.
 
 # Problem 3
@@ -155,11 +157,14 @@ plot(
 Does your output agree with what you expected? 
 Explain the observed phenomenon.
 
-> The relative error drops at first. The drop is linear on a log-log plot => polynomially fast; the slope looks like -2, which matches the theory. [I *think* the slope should strictly be "less than or equal to -2, eventually". But if the second order approximation is good over the range of $\Delta x$ maybe that effectively means -2.]
+> The relative error drops at first. The drop is linear on a log-log plot => polynomially fast; the slope looks like -2, which matches the theory. 
+> [I *think* the slope should strictly be "less than or equal to -2, eventually". But if the second order approximation is good over the range of $\Delta x$ maybe that effectively means -2. It probably shouldn't be <-3.]
 >
 > Then the error starts to get bigger. I presume the problem is the division by a small number in the algorithm. I note that the kink occurs when log2(relative error) + log2(step size) $\approx$ -52. But I don't understand this properly.
 
 **Bonus question 1:** What is the slope in the "latter part" of your plotted line?
+
+> Empirically, looks like 1, i.e *linear* increase in the error. But we didn't get a full asymptotic derivation.
 
 **Bonus question 2:** Implement a strategy to automatically choose a near-optimal $\Delta x$ for numerically approximating the derivative of a given function via centered difference. (Hint: first get a crude estimate of $f'(x)$ and refine it at the next iteration.)
 
