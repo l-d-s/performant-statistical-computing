@@ -1,6 +1,8 @@
 ---
 title: 'Homework: numerical linear algebra and stability issues'
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ```{r setup, echo=FALSE}
@@ -24,15 +26,31 @@ Execute a command `git grep -n "sq_exp_cov <- function"` from the root directory
 Paste the output below.
 
 ```{zsh, eval=FALSE}
-# Paste the `git grep` output.
+homework/numerical_stability.Rmd:23:Execute a command `git grep -n "sq_exp_cov <- function"` from the root directory of the git repository.
+lecture/finite_prec_and_numerical_stability.Rmd:276:sq_exp_cov <- function(dist, range) {
+lecture/finite_prec_and_numerical_stability.Rmd:303:sq_exp_cov <- function(dist, range) {
 ```
 
 The grep output tells you where you can find the (failed) kriging / Gaussian process regression example in the lecture source file.
 Copy the synthetic observation from there (the one defined on the range $[0, 0.4]$ and $[0.6, 1.0]$).
 
 ```{r}
-# Fill in
+sq_exp_cov <- function(dist, range) {
+  return(exp(-(dist / range)^2))
+}
+
+loc_obs <- c(seq(0, .4, .01), seq(.6, 1, .01))
+n_obs <- length(loc_obs)
+
+set.seed(2021)
+corr_range <- .2
+dist_obs <- as.matrix(dist(loc_obs))
+Sigma_obs <- sq_exp_cov(dist_obs, corr_range)
 y_obs <- mvrnorm(mu = rep(0, n_obs), Sigma = Sigma_obs)
+par(mar = c(4.1, 4.1, 0, 0))
+plot(loc_obs, y_obs, xlab="s", ylab="y(s)", 
+     cex=1.8, cex.lab=1.8, cex.axis=1.8, 
+     col=jhu_color$spiritBlue, frame.plot = F)
 ```
 
 Let's now interpolate the missing values in $(0.4, 0.6)$ for real.

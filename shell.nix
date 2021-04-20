@@ -10,6 +10,9 @@
                 cowplot
                 lemon
 
+                MASS
+                Matrix
+
                 devtools
                 knitr
                 styler
