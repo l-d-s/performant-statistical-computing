@@ -12,6 +12,7 @@
 
                 MASS
                 Matrix
+                RSpectra
 
                 devtools
                 knitr

@@ -1,12 +1,37 @@
 ---
 title: 'Homework: iterative method'
-output: html_notebook
+author: "Leon Di Stefano"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+header-includes:
+    - \newcommand{\iidsim}{\overset{\mathrm{ind}}{\sim}}
+    - \newcommand{\d}{\mathrm{d}\;}
+    - \newcommand{\E}{\mathrm{E}}
+    - \newcommand{\Var}{\mathrm{Var}}
+    - \newcommand{\Cov}{\mathrm{Cov}}
+    - \newcommand{\P}{\mathrm{P}}
+    - \renewcommand\vec{\boldsymbol}
 ---
 
 ```{r setup, include = FALSE}
-source(file.path("..", "R", "util.R"))
-required_packages <- c('RSpectra')
-install_and_load_packages(required_packages)
+# source(file.path("..", "R", "util.R"))
+# required_packages <- c('RSpectra')
+# install_and_load_packages(required_packages)
+require('RSpectra')
+knitr::opts_chunk$set(
+  # eval = FALSE # For debugging
+  )
+
+require(tidyverse)
+require(cowplot)
+require(lemon)
+theme_set(theme_cowplot())
+theme_update(
+  strip.background = element_blank(),
+  strip.text.y = element_text(angle = 0),
+  )
 ```
 
 # Problem 1
@@ -31,6 +56,36 @@ More generally, a lag-$k$ (non-stationary) auto-regressive process has a _banded
 Implement a fast matrix-vector $\boldsymbol{v} \to \boldsymbol{\Sigma}^{-1} \boldsymbol{v}$ operation, exploiting the structure of the AR-1 precision matrix.
 Then use this function to find the top 10 principal components of $\boldsymbol{\Sigma}$ (not $\boldsymbol{\Sigma}^{-1}$) via Lanczos algorithm provided via `RSpectra::eigs_sym`.
 
+> Let
+> \begin{align}
+a &= \frac{1}{1 - \phi^2} \\
+b &= 1 + \phi^2 \\
+c &= -\phi
+> \end{align}
+> and $\vec v$ have elements $v_1, \ldots, v_T$.
+>
+> Then $\vec w = \vec \Sigma^{-1} \vec v$ is given by $a$ times
+$$
+\begin{bmatrix} 
+v_1 + c v_2 \\
+b v_2 + c(v_1 + v_3) \\
+\vdots \\
+b v_{T - 1} + c(v_{T - 2} + v_T) \\
+v_T + c v_{T - 1}
+\end{bmatrix}
+=
+\begin{bmatrix} 
+v_1 \\
+b \vec v_{2:T-1} \\
+v_T
+\end{bmatrix}
++
+c(\mathrm{lead}(\vec v) + \mathrm{lag}(\vec v))
+$$
+> where the out-of-bounds indices in "lead" and "lag" are set to 0.
+>
+> I believe a vectorized, numerically sensible way to compute this is to first compute $b\vec v$, then manually mutate the first and last elements in-place, then add the second term, then scale the whole thing by $a$. There are fast implementations of lead and lag in `dplyr`.
+
 ```{r}
 ar_length <- 4096
 auto_corr <- .9 # Corresponds to `\phi` above
@@ -38,11 +93,28 @@ auto_corr <- .9 # Corresponds to `\phi` above
 ar_precision_matvec <- function(v, auto_corr) {
   # Fill in: note that you can vectorize the calculation and do *not* need a for-loop. 
   # (Hint: how would you efficiently carry out a matrix-vector operation if the matrix has non-zero entries only along the sub or super diagonal?)
+  
+  a <- 1/(1 - auto_corr^2)
+  b <- 1 + auto_corr^2
+  c <- -auto_corr
+  
+  w <- b * v
+  w[1]         <- v[1]
+  w[length(v)] <- v[length(v)]
+  w <- w + c * (
+    lead(v, default = 0) + 
+      lag(v, default = 0))
+  w <- a*w
+  
+  return(w)
 }
 
 ar_eig <- eigs_sym(
   ar_precision_matvec, args = auto_corr,
   # Fill in
+  n = ar_length,
+  k = 10,
+  which = "SM", # Largest eigs of cov => smallest of prec
   opts = list(
     ncv = 100, # Spectrum distribution of AR-1 process is not very spread out on the extreme ends and is actually a hard case for Lanczos. So it helps to have more Lanczos vectors than the default for faster convergence.
     maxitr = 10^3, # Cap it just in case
@@ -53,9 +125,53 @@ ar_eig <- eigs_sym(
 
 Now, directly compute the eigen decomposition of $\boldsymbol{\Sigma}$ (not $\boldsymbol{\Sigma}^{-1}$) and compare its output with the principal components and associated variances found via Lancsoz algorithm.
 
+> With the parametrization given, 
+$$
+\Var(x_t) = \phi^2 \Var(x_{t-1}) + (1 - \phi^2)
+$$
+so that all of the terms have variance 1, and
+$$
+\Cov(x_t, x_{t-k}) = \phi \Cov(x_{t - 1}, x_{t - k})
+$$
+so that $\Cov(x_t, x_{t-k}) = \phi^{k}$.
+The covariance matrix thus has entries
+$$ \sigma_{ij} = \phi^{|i - j|}.$$
+
 ```{r}
-# Fill in
+ar_cov_matrix <-
+  matrix(
+    auto_corr^(abs(
+      rep(1:ar_length, ar_length) - rep(1:ar_length, each = ar_length))),
+    nrow = ar_length)
+
+ar_cov_eig_direct <-
+  eigen(ar_cov_matrix)
 ```
+
+> Comparing the two: first, eigenvalues:
+
+```{r}
+ggplot2::qplot(
+  rev(1/ar_eig$values),
+  ar_cov_eig_direct$values[1:10],
+  size = I(.5)
+) +
+  theme(aspect.ratio = 1) +
+  geom_abline(color = "orange", alpha = .3) +
+  xlab("Lanczos of precision matrix") +
+  ylab("Direct computation") +
+  ggtitle("Top 10 eigenvalues, computed two ways")
+```
+> Looks good.
+>
+> Next, vectors. Since the eigenvectors are only determined up to sign, I'll compare them using absolute correlations, which correspond to cosines of angles between the corresponding directions.
+
+```{r}
+sqrt(colSums(
+  (ar_eig$vectors - ar_cov_eig_direct$vectors[,10:1])^2))
+```
+
+> This looks right: the eigenvectors are given as unit vectors and are only determined up to sign. The zeroes correspond to same direction, same orientation, and the 2s correspond to same direction, opposite orientation.
 
 **Remark:** 
 For banded matrices, there actually are even more efficient approaches.
