@@ -59,32 +59,120 @@ We can ignore the components with negligible ($\approx 0$) variance in computing
 In other words, we approximate $\boldsymbol{\Sigma}_{\textrm{obs}}^{-1}$ with $\sum_{i = 1}^k \lambda_i^{-1} \boldsymbol{u}_i \boldsymbol{u}_i^\intercal$ in computing $\boldsymbol{\Sigma}_{\textrm{obs}}^{-1} \boldsymbol{y}_{\textrm{obs}}$ for a suitably chosen number of principal components $k$.
 Choose $k$ to capture $99.99$\% of variance in $\boldsymbol{y}_{\textrm{obs}} \sim \mathcal{N}(\boldsymbol{0}, \boldsymbol{\Sigma}_{\textrm{obs}})$.
 
+> The setup is that $y = (y^\text{obs}, y^\text{mis})$ or for brevity $(y_1, y_2)$. We observe $y_1$ and want the conditional mean, and later variance, of $(y_2 \mid y_1)$; call these $\mu_{2 \mid 1}$ and $\Sigma_{2 \mid 1}$.
+>
+> The model is that jointly $y_1$ and $y_2$ are Gaussian with mean $\mu$ and variance $\Sigma$ where
+> $$ \mu = 
+     \begin{pmatrix}\mu_1 \\ \mu_2 \end{pmatrix};
+     \Sigma =
+     \begin{pmatrix}\Sigma_{11} & \Sigma_{12} \\
+                    \Sigma_{21} & \Sigma_{22} \end{pmatrix}.
+  $$
+> In this problem $$\Sigma_{ij} = \exp\left\{ \left(\frac{|x_i - x_j|}{l}\right)^2. \right\}$$ and $\mu_1 = \mu_2 = 0$. 
+> 
+> Then
+> $$ \mu_{2 | 1} = \mu_2 + \Sigma_{21}\Sigma_{11}^{-1}(y_1 - \mu_1) $$
+> and
+> $$ \Sigma_{2 | 1} = \Sigma_{22} - \Sigma_{21}\Sigma_{11}^{-1}\Sigma_{12}. $$
+>
+> The key computation we want to simplfy is to approximate $\Sigma_{11}^{-1}$ using the first "few" eigenspaces.
+
 ```{r}
 loc_new <- seq(.41, .59, .01)
 # Compute the conditional mean of GP on the new locations.
+
+Sigma_11_eig <- eigen(Sigma_obs)
+prop_variance_explained <-
+  cumsum(Sigma_11_eig$values)/sum(Sigma_11_eig$values)
+
+(eig_indices <-
+  which(prop_variance_explained < 99.99/100))
 ```
 
-```{r, fig.dim=c(8, 5), fig.align='center'}
+> So a ten dimensional approximation should be fine:
+
+```{r}
+Sigma_11_inv_hat <-
+  # Not sure if this is the best way to do this:
+  Sigma_11_eig$vectors[,eig_indices] %*% 
+  diag(1/Sigma_11_eig$values[1:10]) %*%
+  t(Sigma_11_eig$vectors[,eig_indices])
+
+Sigma <-
+  # Wasteful, but not sure how to better compute pairwise distances
+  sq_exp_cov(as.matrix(dist(c(loc_obs, loc_new))),
+             corr_range)
+
+Sigma_21 <-
+  Sigma[(nrow(Sigma) - length(loc_new) + 1):nrow(Sigma), 
+        1:length(loc_obs)]
+  
+mu_hat_new <- Sigma_21 %*% Sigma_11_inv_hat %*% y_obs
+```
+
+```{r, fig.dim=c(8, 5), fig.align='center', eval=FALSE}
 solid_circle_index <- 19
 plot(
   # Fill in
-  xlab="s", ylab="y(s)", 
-  pch=solid_circle_index,
+  loc_obs, y_obs,
+  xlab="s", ylab="y(s)",
   cex.lab=1.4, cex.axis=1.4, 
-  col=jhu_color$heritageBlue, 
+  col=jhu_color$spiritBlue,
   frame.plot = F
 )
 points(
-  # Fil in
-  col = jhu_color$spiritBlue
+  # Fill in
+  loc_new, mu_hat_new,
+  col = jhu_color$heritageBlue, 
+  pch=solid_circle_index
 )
 ```
+> Looks good.
 
 ## Part 2: Quantifying uncertainty in interpolation
 Use the eigen-decomposition technique to compute the conditional covariance 
 $$\textrm{Var}(\boldsymbol{y}_1 \, | \, \boldsymbol{y}_2)
   = \boldsymbol{\Sigma}_{11} - \boldsymbol{\Sigma}_{12} \boldsymbol{\Sigma}_{22}^{-1} \boldsymbol{\Sigma}_{21},$$
 calculate 95% CI intervals of the interpolation, and plot them.
+
+```{r}
+Sigma_22 <-
+  Sigma[(nrow(Sigma) - length(loc_new) + 1):nrow(Sigma), 
+        (nrow(Sigma) - length(loc_new) + 1):nrow(Sigma)]
+
+Sigma_2_bar_1_hat <- Sigma_22 - Sigma_21 %*% Sigma_11_inv_hat %*% t(Sigma_21)
+
+# Pointwise (marginal) intervals
+ci_upper <- mu_hat_new + 1.96 * sqrt(diag(Sigma_2_bar_1_hat))
+ci_lower <- mu_hat_new - 1.96 * sqrt(diag(Sigma_2_bar_1_hat))
+```
+
+> Plotting
+
+```{r, fig.dim=c(8, 5), fig.align='center', eval=FALSE}
+solid_circle_index <- 19
+plot(
+  # Fill in
+  loc_obs, y_obs,
+  xlab="s", ylab="y(s)",
+  cex.lab=1.4, cex.axis=1.4, 
+  col=jhu_color$spiritBlue,
+  frame.plot = F
+)
+polygon(
+  x = c(loc_new, rev(loc_new)),
+  y = c(ci_upper, rev(ci_lower)),
+  col = "lightblue", lty = 0
+)
+points(
+  # Fill in
+  loc_new, mu_hat_new,
+  col = jhu_color$heritageBlue, 
+  pch=solid_circle_index
+)
+```
+
+> Looks reasonable.
 
 ## Part 3: Kriging based on an alternative GP covariance function
 
