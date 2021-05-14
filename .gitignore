@@ -8,3 +8,5 @@ lecture/*.pdf
 .Rhistory
 .RData
 .Ruserdata
+.envrc
+*_libs/
