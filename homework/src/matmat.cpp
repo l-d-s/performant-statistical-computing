@@ -37,9 +37,14 @@ NumericMatrix col_oriented_matmat(
     Rcpp::stop("Incompatible dimensions");
   }
   NumericMatrix C(n_row_A, n_col_B);
-  for (int j = 0; j < n_col_B; ++j) {
+  for (int c = 0; c < n_col_B; ++c) {
     // Calculate C[, j] = A %*% B[_, j] in column-oriented manner for each j
     // Fill in
+    for (int r = 0; r < n_row_A; ++r) {
+        for (int k = 0; k < interior_dim; ++k) {
+            C(r, c) += A(r, k) * B(k, c);
+        }
+    }
   }
   return C;
 }

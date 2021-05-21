@@ -214,14 +214,34 @@ Then compare performances of `row_col_dot_matmat` and `col_oriented_matmat` (but
 Which one is faster and why?
 
 ```{r}
-# Check and benchmark
+# Check
+summary(as.numeric(
+  A %*% B - col_oriented_matmat(A, B))
+)
+```
+
+```{r}
+# Benchmark
+matmat_benchmark <-
+  bench::mark(
+    A %*% B,
+    row_col_dot_matmat(A, B),
+    col_oriented_matmat(A, B),
+    check = FALSE,
+) %>%
+  mutate(expression = as.character(expression))
+
+matmat_benchmark
 ```
 
 Also compare with performance of the matrix-matrix multiplication via `%*%` in R, which uses whatever the BLAS library your R was configured with.
 (You can find out which BLAS library R is using via `sessionInfo()` or `extSoftVersion()`.) 
 
-```{r}
-# Fill in
+> They're each ~150-200x times slower than `%*%`/BLAS. Col oriented takes ~75% the time of row oriented.
+> BLAS info:
+```
+Matrix products: default
+BLAS/LAPACK: /nix/store/py9w4nc0zzhxawly2dfz65dksphgrys6-openblas-0.3.7/lib/libopenblasp-r0.3.7.so
 ```
 
 When benchmarking alternative implementations (or alternative algorithms, more generally), keep in mind that the relative performance depends significantly on the size of a test problem.
