@@ -14,6 +14,8 @@
                 Matrix
                 RSpectra
 
+                bench
+
                 devtools
                 knitr
                 styler
