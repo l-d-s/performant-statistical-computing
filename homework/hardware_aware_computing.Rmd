@@ -24,6 +24,7 @@ knitr::opts_chunk$set(comment = '')
 
 
 # Problem 1: Accelerated principal component calculation via Rcpp
+
 In prior homework, we implemented an approach to calculating the principal components of a lag-1 auto-regressive process without explicitly representing its covariance matrix $\boldsymbol{\Sigma}$.
 To this end, we only needed to provide the Lanczos algorithm a function for carrying out the matrix-vector multiplication $\boldsymbol{v} \to \boldsymbol{\Sigma}^{-1} \boldsymbol{v}$.
 Here we will try to make the function more efficient by re-writing it in Rcpp.
@@ -60,7 +61,18 @@ ar_precision_matvec_R <- function(v, auto_corr) {
 
 ```{r}
 # Check the output of your Rcpp function `ar_precision_matvec`
+ar_precision_matvec_R(1:10, auto_corr)
 ```
+
+```{r}
+ar_precision_matvec(1:10, auto_corr)
+```
+
+```{r}
+ar_precision_matvec_R(1:10, auto_corr) - ar_precision_matvec(1:10, auto_corr)
+```
+
+> Looks good.
 
 Benchmark performance of the R and Rcpp implementations of `ar_precision_matvec`.
 Then use the Rcpp implementation to find the top 10 principal components of $\boldsymbol{\Sigma}$ via Lanczos algorithm.
@@ -68,7 +80,15 @@ How much faster is it compared to explicit eigen decomposition of $\boldsymbol{\
 
 ```{r}
 # Comare performences of the R and Rcpp implementation
+x <- rnorm(ar_length)
+
+bench::mark(
+  ar_precision_matvec_R(x, auto_corr),
+  ar_precision_matvec(x, auto_corr)
+)
 ```
+
+> Looks like the Rccp implementation is ~9 times faster.
 
 ```{r, eval=FALSE}
 # Use your Rcpp implementation and compute the principal components
