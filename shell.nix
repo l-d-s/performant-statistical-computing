@@ -16,6 +16,7 @@
 
                 bench
 
+                ggbeeswarm # for the `bench` plots
                 devtools
                 knitr
                 styler
