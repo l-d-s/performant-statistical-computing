@@ -15,6 +15,8 @@ for (pkg in required_packages) {
 }
 
 source(file.path("..", "R", "util.R"))
+
+require(tidyverse)
 ```
 
 ```{r knitr_options, include=FALSE}
@@ -82,29 +84,88 @@ How much faster is it compared to explicit eigen decomposition of $\boldsymbol{\
 # Comare performences of the R and Rcpp implementation
 x <- rnorm(ar_length)
 
-bench::mark(
-  ar_precision_matvec_R(x, auto_corr),
-  ar_precision_matvec(x, auto_corr)
-)
-```
-
-> Looks like the Rccp implementation is ~9 times faster.
-
-```{r, eval=FALSE}
-# Use your Rcpp implementation and compute the principal components
-system.time(
-  ar_eig <- eigs_sym(
-    ar_precision_matvec,
-    n = ar_length, args = auto_corr,
-    k = 10, which = "SM",
-    opts = list(
-      ncv = 100, # Spectrum distribution of AR-1 process is not very spread out on the extreme ends and is actually a hard case for Lanczos. So it helps to have more Lanczos vectors than the default for faster convergence.
-      maxitr = 10^3, # Cap it just in case
-      retvec = TRUE # More efficient to do without eigenvectors when not needed
-    ),
+benchmark_matvec <- 
+  bench::mark(
+    ar_precision_matvec_R(x, auto_corr),
+    ar_precision_matvec(x, auto_corr)
   )
-)
+
+benchmark_matvec %>%
+  mutate(
+    expression = as.character(expression)
+  )
 ```
+
+> Looks like the Rccp implementation of AR(1) matrix-vector multiplication is ~9 times faster.
+
+```{r, eval=FALSE, cache=TRUE}
+# Use your Rcpp implementation and compute the principal components
+ar_eig_rcpp_lanczos <-
+  function() {
+    ar_eigs <- eigs_sym(
+      ar_precision_matvec,
+      n = ar_length, args = auto_corr,
+      k = 10, which = "SM",
+      opts = list(
+        ncv = 100, # Spectrum distribution of AR-1 process is not very spread out on the extreme ends and is actually a hard case for Lanczos. So it helps to have more Lanczos vectors than the default for faster convergence.
+        maxitr = 10^3, # Cap it just in case
+        retvec = TRUE # More efficient to do without eigenvectors when not needed
+      ),
+    )
+    
+    return(ar_eigs)
+  }
+
+ar_eig_direct <-
+  function() {
+    ar_cov_matrix <-
+      matrix(
+        auto_corr^(abs(
+          rep(1:ar_length, ar_length) - rep(1:ar_length, each = ar_length))),
+        nrow = ar_length)
+    
+    ar_eigs <-
+      eigen(ar_cov_matrix, symmetric = TRUE)
+  }
+
+# Also try using the RSpectra package without
+# our hand-rolled multiplication
+
+ar_eig_lanczos <-
+  function() {
+    ar_cov_matrix <-
+      matrix(
+        auto_corr^(abs(
+          rep(1:ar_length, ar_length) - rep(1:ar_length, each = ar_length))),
+        nrow = ar_length)
+    
+    ar_eigs <- eigs_sym(
+      A = ar_cov_matrix,
+      n = ar_length, args = auto_corr,
+      k = 10, which = "SM",
+      opts = list(
+        ncv = 100, # Spectrum distribution of AR-1 process is not very spread out on the extreme ends and is actually a hard case for Lanczos. So it helps to have more Lanczos vectors than the default for faster convergence.
+        maxitr = 10^3, # Cap it just in case
+        retvec = TRUE # More efficient to do without eigenvectors when not needed
+      ),
+    )
+    
+    return(ar_eigs)
+  }
+
+benchmark_ar_eig <-
+  bench::mark(
+    ar_eig_direct,
+    ar_eig_lanczos,
+    ar_eig_rcpp_lanczos,
+    check = FALSE # Don't compare results
+)
+
+benchmark_ar_eig %>%
+  mutate(expression = as.character(expression))
+```
+
+> It takes about 2/3rds as long. But it also looks like `RSpectra` with an explicit matrix is a bit more efficient than our manual `Rcpp` matrix-vector multiplication.
 
 **Bonus Problem:** A symmetric '$k$-banded' matrices of size $n \times n$ can be efficiently stored in a $n \times (k + 1)$ matrix with no loss of information; see [Wikipedia page on banded matrices](https://en.wikipedia.org/wiki/Band_matrix#Band_storage).
 Complete the implementation of `sym_banded_matvec` in the `structured_matvec.cpp` file.
