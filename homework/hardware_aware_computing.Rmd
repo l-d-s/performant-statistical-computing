@@ -200,6 +200,9 @@ B <- matrix(rnorm(n_inner * n_col), nrow = n_inner, ncol = n_col)
 
 ```{r}
 # Check the output of `row_col_dot_matmat`
+summary(as.numeric(
+  A %*% B - row_col_dot_matmat(A, B))
+)
 ```
 
 ## Part II: Going one step beyond your linear algebra class

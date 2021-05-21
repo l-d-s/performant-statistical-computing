@@ -15,6 +15,14 @@ NumericMatrix row_col_dot_matmat(
   }
   NumericMatrix C(n_row_A, n_col_B);
   // Fill in; remember to use (,) instead of [,] for accessing matrix elements
+  for (int r = 0; r < n_row_A; ++r) {
+      for (int c = 0; c < n_col_B; ++c) {
+          // Sum over inner dimension
+          for (int k = 0; k < interior_dim; ++k) {
+               C(r, c) += A(r, k) * B(k, c);
+          }
+      }
+  }
   return C;
 }
 
