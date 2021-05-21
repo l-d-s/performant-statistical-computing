@@ -17,6 +17,9 @@ for (pkg in required_packages) {
 source(file.path("..", "R", "util.R"))
 
 require(tidyverse)
+require(ggbeeswarm) # for `autplot`ting `bench` output
+require(cowplot)
+theme_set(theme_cowplot())
 ```
 
 ```{r knitr_options, include=FALSE}
@@ -96,9 +99,13 @@ benchmark_matvec %>%
   )
 ```
 
+```{r}
+autoplot(benchmark_matvec)
+```
+
 > Looks like the Rccp implementation of AR(1) matrix-vector multiplication is ~9 times faster.
 
-```{r, eval=FALSE, cache=TRUE}
+```{r, cache=TRUE}
 # Use your Rcpp implementation and compute the principal components
 ar_eig_rcpp_lanczos <-
   function() {
@@ -265,5 +272,27 @@ sourceCpp(file.path('src', 'matmat_eigen.cpp'))
 ```
 
 ```{r}
-# Check and benchmark
+# Check
+summary(as.numeric(
+  A %*% B - matmat_via_eigen(A, B))
+)
 ```
+
+Benchmarks:
+
+```{r}
+# Benchmark
+matmat_benchmark <-
+  bench::mark(
+    A %*% B,
+    row_col_dot_matmat(A, B),
+    col_oriented_matmat(A, B),
+    matmat_via_eigen(A, B),
+    check = FALSE,
+) %>%
+  mutate(expression = as.character(expression))
+
+autoplot(matmat_benchmark)
+```
+
+> Native wins on this benchmark—and by a longshot—with this size of matrix ...
